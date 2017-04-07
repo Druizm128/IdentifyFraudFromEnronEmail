@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+#!/usr/bin/python
 import sys
 import pickle
 import numpy as np
@@ -8,64 +9,48 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 sys.path.append("../tools/")
 from feature_format import featureFormat, targetFeatureSplit
-from tester import dump_classifier_and_data
+from tester import dump_classifier_and_data, test_classifier
 import pprint
+
 
 ### Task 1: Select what features you'll use.
 ### features_list is a list of strings, each of which is a feature name.
 ### The first feature must be "poi".
 
-# features_list = ['poi','total_payments','total_stock_value','fraction_to_poi_messages','fraction_from_poi_messages']
+# features_list is a list of strings, each of which is a feature name.
+# The first feature must be "poi".
 features_list = ['poi','salary','bonus','long_term_incentive','deferred_income','deferral_payments','loan_advances','other','expenses','director_fees','exercised_stock_options','restricted_stock','restricted_stock_deferred','fraction_to_poi_messages','fraction_from_poi_messages']
-# features_list = ['poi','salary','bonus','long_term_incentive','deferred_income','deferral_payments','loan_advances','other','expenses','director_fees','total_payments','exercised_stock_options','restricted_stock','restricted_stock_deferred','total_stock_value','to_messages','from_poi_to_this_person','from_messages','from_this_person_to_poi','shared_receipt_with_poi','fraction_to_poi_messages','fraction_from_poi_messages']
+
 ### Load the dictionary containing the dataset
 with open("final_project_dataset.pkl", "r") as data_file:
     data_dict = pickle.load(data_file)
 
 ### Task 2: Remove outliers
-# Removing total observations
+# Removing non person observations
 data_dict.pop('TOTAL',0)
-
-# Not POI outliers
-data_dict.pop('BAXTER JOHN C',0)
-data_dict.pop('BHATNAGAR SANJAY',0)
-data_dict.pop('DIMICHELE RICHARD G',0)
-data_dict.pop('FREVERT MARK A',0)
-data_dict.pop('HORTON STANLEY C',0)
-data_dict.pop('LAVORATO JOHN J',0)
-data_dict.pop('MARTIN AMANDA K',0)
-data_dict.pop('PAI LOU L',0)
-data_dict.pop('WHALEY DAVID A',0)
-data_dict.pop('WHITE JR THOMAS E',0)
-
-# POI outliers
-#data_dict.pop('HIRKO JOSEPH',0)
-data_dict.pop('LAY KENNETH L',0)
-#data_dict.pop('RICE KENNETH D',0)
-data_dict.pop('SKILLING JEFFREY K',0)
-#data_dict.pop('YEAGER F SCOTT',0)
-
+data_dict.pop('THE TRAVEL AGENCY IN THE PARK',0)
 
 ### Task 3: Create new feature(s)
 # Fraction of emails written to POI and received from POI from total emails sent and received respectively
 
 for name in data_dict:
-	total_messages = data_dict[name]['to_messages']
-	to_poi = data_dict[name]['from_this_person_to_poi']
+    from_poi_to_this_person = data_dict[name]['from_poi_to_this_person']
+    to_messages = data_dict[name]['to_messages']
+    
+    if from_poi_to_this_person == 'NaN' or to_messages == 'NaN':
+        data_dict[name]['fraction_to_poi_messages'] = 0
+    else:
+        data_dict[name]['fraction_to_poi_messages'] = float(from_poi_to_this_person) / float(to_messages)
 
-	if total_messages == 'NaN' or to_poi == 'NaN':
-		data_dict[name]['fraction_to_poi_messages'] = 0
-	else:
-		data_dict[name]['fraction_to_poi_messages'] = float(to_poi) / float(total_messages)
+    from_this_person_to_poi = data_dict[name]['from_this_person_to_poi']
+    from_messages = data_dict[name]['from_messages']
 
-	total_received = data_dict[name]['from_messages']
-	from_poi = data_dict[name]['from_poi_to_this_person']
+    if from_this_person_to_poi == 'NaN' or from_messages == 'NaN':
+        data_dict[name]['fraction_from_poi_messages'] = 0
+    else:
+        data_dict[name]['fraction_from_poi_messages'] = float(from_this_person_to_poi) / float(from_messages)
 
-	if total_received == 'NaN' or from_poi == 'NaN':
-		data_dict[name]['fraction_from_poi_messages'] = 0
-	else:
-		data_dict[name]['fraction_from_poi_messages'] = float(from_poi) / float(total_received)
- 
+
 ### Store to my_dataset for easy export below.
 my_dataset = data_dict
 
@@ -74,38 +59,26 @@ data = featureFormat(my_dataset, features_list, sort_keys = True)
 labels, features = targetFeatureSplit(data)
 
 ### Data exploration
-print
-print "--------- Data Exploration ---------"
-print 'obs. :', len(labels)
-print 'POIs: ', np.array(labels).sum()
-print 'non-POIs: ', len(labels) - np.array(labels).sum()
-print 'features: ', len(features_list)-1
-print features_list[1:len(features)]
-print
-print 'Descriptive satistics'
+print '\nExploratory data analysis and descriptive statistics:\n'
+df = pd.DataFrame(data)
+df.columns = features_list
+print 'Number of Rows and Columns: ', df.shape
+print '\nPOIs: ', df.poi.sum()
+print 'non-POIs: ', df['poi'].size - df.poi.sum()
+print '\nfeatures: ', len(features_list)-1
+print '\nfeatures list: ', features_list[1:len(features)]
 
-features_dict = {}
+# POI barplot
+
+sns.countplot(df.poi)
+plt.title("Persons of interest\n(0 = No, 1 = Yes)")
+plt.show()
 
 
-for i in range(1,len(features_list)):
-	feature_name = features_list[i]
-	feature_data = []
-	for person in features:
-		feature_data.append(person[i-1])
-	features_dict[feature_name] = feature_data
-
-datos = pd.DataFrame(features_dict)
-
-for var in features_list[1:]:
-	datos[var].hist()
-	plt.title(var + ' historgram')
-	plt.show()
-	plt.boxplot(datos[var].values)
-	plt.title(var + ' boxplot')
-	plt.show()
-
-print datos.describe()
-
+# scatter plot matrix
+from pandas.tools.plotting import scatter_matrix
+scatter_matrix(df, alpha=0.2, figsize=(15, 15), diagonal='kde')
+plt.show()
 
 ### Task 4: Try a varity of classifiers
 ### Please name your classifier clf for easy export below.
@@ -115,58 +88,83 @@ print datos.describe()
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import precision_recall_fscore_support
+from sklearn.metrics import confusion_matrix
 
-from sklearn.naive_bayes import GaussianNB
-from sklearn.svm import SVC
-from sklearn import tree
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
-
-
+# Defines a function that returns a dictionary containing the results of comparing the predicted vs the observed labels.
 def modelEvaluation(prediction, real_observations):
-	print 'Classifier accuracy with testing set:'
-	accuracyScore = accuracy_score(prediction, real_observations)
-	print 'Accuracy: ', accuracyScore
-	precisionScore = precision_score(prediction, real_observations)
-	print 'Precision score: ', precisionScore
-	recallScore = recall_score(prediction, real_observations)
-	print 'Recall score: ', recallScore	
+    accuracyScore = accuracy_score(prediction, real_observations)
+    precisionScore = precision_score(prediction, real_observations)
+    recallScore = recall_score(prediction, real_observations)
+    f1Score = f1_score(prediction, real_observations)
+    confusion = confusion_matrix(prediction, real_observations)
+    
+    results = {'Accuracy_score': accuracyScore,
+               'Precision_score': precisionScore, 
+               'Recall_score': recallScore, 
+               'F_score': f1Score,
+               'Predictions':len(labels_test),
+               'True positives': confusion[1,1],
+               'True negatives': confusion[0,0],
+               'False positives': confusion[0,1],
+               'False negatives': confusion[1,0]
+              }
+    return results
+# Defines a function that returns a dataframe containing the results for all the fitted models.
+def finalResults(results):
+    cols = ['Accuracy_score','Precision_score','Recall_score','F_score','Predictions','True positives','False positives','False negatives','True negatives']
+    final_results = pd.DataFrame(results,cols).transpose()
+    final_results = final_results.sort_values('F_score',ascending=False)
+    return final_results
+
 
 # Provided to give you a starting point. Try a variety of classifiers.
+
+# Step 1: Split data
+from sklearn.model_selection import train_test_split
+features_train, features_test, labels_train, labels_test = \
+    train_test_split(features, labels, test_size=0.3, random_state=42)
+
+print '\nInitial estimation of classifiers'
+# a) Naive Bayes
+from sklearn.model_selection import cross_val_score
+from sklearn.naive_bayes import GaussianNB
 clf = GaussianNB()
-#clf_NB = GaussianNB()
-clf_SVC = SVC()
-clf_tree = tree.DecisionTreeClassifier(min_samples_split=50)
-clf_KVC = KNeighborsClassifier()
+clf.fit(features_train,labels_train)
+pred = clf.predict(features_test)
+NB_results = modelEvaluation(pred, labels_test)
+#cross_val_score(clf,features_train,labels_train,cv=10,scoring='f1').mean()
+
+# b) Decision Tree
+from sklearn.tree import DecisionTreeClassifier
+clf = DecisionTreeClassifier()
+clf.fit(features_train,labels_train)
+pred = clf.predict(features_test)
+DT_results = modelEvaluation(pred, labels_test)
+#cross_val_score(clf,features_train,labels_train,cv=10,scoring='f1').mean()
+
+#c) Logit Regression
+from sklearn.linear_model import LogisticRegression
 clf_logit = LogisticRegression()
-'''
-clf_NB.fit(features,labels)
-pred_NB = clf_NB.predict(features)
-print '\nGaussian Naive Bavyes'
-modelEvaluation(pred_NB, labels)
+clf_logit.fit(features_train,labels_train)
+pred = clf_logit.predict(features_test)
+LogitResults = modelEvaluation(pred, labels_test)
+#cross_val_score(clf,features_train,labels_train,cv=10,scoring='f1').mean()
 
+#d) K-Nearest Neighbors
+from sklearn.neighbors import KNeighborsClassifier
+clf = KNeighborsClassifier()
+clf.fit(features_train,labels_train)
+pred = clf.predict(features_test)
+K_NNResults = modelEvaluation(pred, labels_test)
+#cross_val_score(clf,features_train,labels_train,cv=10,scoring='f1').mean()
 
-clf_SVC.fit(features,labels)
-pred_SVC = clf_SVC.predict(features)
-print '\nSVM'
-modelEvaluation(pred_SVC, labels)
+#Results for initial model estimations
+print '\nResults for initial model estimations'
+results = {'Naive Bayes': NB_results, 'Decision Tree': DT_results, 'Logit': LogitResults, 'KNN': K_NNResults}
+print finalResults(results)
 
-clf_tree.fit(features,labels)
-pred_tree = clf_tree.predict(features)
-print '\nDescision Tree'
-modelEvaluation(pred_tree, labels)
-
-clf_KVC.fit(features,labels)
-pred_KVC = clf_KVC.predict(features)
-print '\nK-nearest neighbors'
-modelEvaluation(pred_KVC, labels)
-
-
-clf_logit.fit(features,labels)
-pred_logit = clf_logit.predict(features)
-print '\nLogit model'
-modelEvaluation(pred_logit, labels)
-'''
 
 ### Task 5: Tune your classifier to achieve better than .3 precision and recall 
 ### using our testing script. Check the tester.py script in the final project
@@ -175,89 +173,231 @@ modelEvaluation(pred_logit, labels)
 ### stratified shuffle split cross validation. For more info: 
 ### http://scikit-learn.org/stable/modules/generated/sklearn.cross_validation.StratifiedShuffleSplit.html
 
-
 # Example starting point. Try investigating other evaluation techniques!
-'''
-from sklearn.model_selection import train_test_split
-features_train, features_test, labels_train, labels_test = \
-    train_test_split(features, labels, test_size=0.5, random_state=42)
-'''
+from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.feature_selection import SelectKBest, f_classif
+
+# a) Naive Bayes
+print '\na) Naive Bayes'
+# Step 1: Split the data in training and testing set(see above)
+
+# Step 2: Make pipeline
+pipeline = Pipeline([
+        ('scaler', MinMaxScaler()),
+        ('kbest',SelectKBest()),
+        ('clf', GaussianNB())
+    ])
+
+# Step 3: Set parameters list
+k_features = range(1,len(features_list))
+param_grid = {'kbest__k': k_features}
+
+#Step 4: Make cross validation iterator
+#sss = StratifiedShuffleSplit(n_splits=1000, test_size=0.1, train_size=None, random_state=42)
+# Stratified KFold set to 10 folds
+
+# Step 5: Make the GridSearchCV object clf with the paramters set above: pipeline, param_grid, sss
+gridNB = GridSearchCV(estimator = pipeline,
+                             param_grid = param_grid,
+                             scoring = 'f1',
+                             cv= 10)
+
+# Step 6: Do training and cross validation with clf (fit to the data)
+gridNB.fit(features_train,labels_train)
+#pprint.pprint(grid.cv_results_) 
 
 
-print "------------ Fine tuning------------"
+# Step 6.1: Get the set of best parameters and features
+print '\nBest parameters chosen from the grid:'
+pprint.pprint(gridNB.best_params_)
+features_selected = [features_list[i+1] for i in gridNB.best_estimator_.named_steps['kbest'].get_support(indices=True)]
+print 'The Features Selected by SKB - GS:'
+pprint.pprint(features_selected)
+
+# K best scores NB
+f = features_list[1:]
+s = gridNB.best_estimator_.named_steps['kbest'].scores_
+results = {'features':f,'scores': s}
+selectKBestScores = pd.DataFrame(results).sort_values('scores',ascending=False)
+sns.barplot(x=selectKBestScores.features, y=selectKBestScores.scores)
+plt.title("K Best Scores in Naive Bayes")
+plt.xticks(rotation=90)
+plt.show()
+
+# Step 6.2: Get best estimator
+clf = gridNB.best_estimator_
+
+# Step 7: Predict with testing set
+pred = clf.predict(features_test)
+tunedNaiveBayes = modelEvaluation(pred, labels_test)
+#test_classifier(clf, my_dataset, features_list)
 
 
-from sklearn.model_selection import KFold
-kf = KFold(10, shuffle=False)
-print kf
+# b) Decision Tree
+print '\nb) Decision Tree'
+# Step 1: Split the data in training and testing set(see above)
 
-accuracy_score_list = []
-precision_score_list = []
-recall_score_list = []
+# Step 2: Make pipeline
+pipeline = Pipeline([
+        ('scaler', MinMaxScaler()),
+        ('kbest',SelectKBest()),
+        ('clf', DecisionTreeClassifier())
+        ])
 
-print '\nGaussian Naive Bayes'
-print "................................"
-for train_index, test_index  in  kf.split(labels):
-	features_train = [features[ii] for ii in train_index] 
-	features_test  = [features[ii] for ii in test_index]
-	labels_train   = [labels[ii] for ii in train_index]
-	labels_test    = [labels[ii] for ii in test_index]
+# Step 3: Set parameters list
+param_grid = {'kbest__k': k_features,
+              'clf__splitter' : ['best','random'], 
+              'clf__min_samples_split':[2,3]}
 
-	
-	clf.fit(features_train,labels_train)
-	pred = clf.predict(features_test)
-	
-	#modelEvaluation(pred_NB, labels_test)
-	accuracy_score_list.append(accuracy_score(pred, labels_test))
-	precision_score_list.append(precision_score(pred, labels_test))
-	recall_score_list.append(recall_score(pred, labels_test))
-print 'Average results for a KFold 10 splits:'
-print 'Accuracy score mean: ', np.array(accuracy_score_list).mean()
-print 'Precision score mean: ',np.array(precision_score_list).mean()
-print 'Recall score mean: ', np.array(recall_score_list).mean()
-'''
-	for train_index, test_index  in  kf.split(labels):
-	features_train = [features[ii] for ii in train_index] 
-	features_test  = [features[ii] for ii in test_index]
-	labels_train   = [labels[ii] for ii in train_index]
-	labels_test    = [labels[ii] for ii in test_index]
+#Step 4: Make cross validation iterator
+#sss = StratifiedShuffleSplit(n_splits=20, test_size=0.1, train_size=None, random_state=None)
 
-	#print "................................"
-	clf_NB.fit(features_train,labels_train)
-	pred_NB = clf_NB.predict(features_test)
-	print '\nGaussian Naive Bayes'
-	#modelEvaluation(pred_NB, labels_test)
-	accuracy_score_list.append(accuracy_score(pred_NB, labels_test))
-	precision_score_list.append(precision_score(pred_NB, labels_test))
-	recall_score_list.append(recall_score(pred_NB, labels_test))
-print
-print 'Accuracy score mean: ', np.array(accuracy_score_list).mean()
-print 'Precision score mean: ',np.array(precision_score_list).mean()
-print 'Recall score mean: ', np.array(recall_score_list).mean()
+# Step 5: Make the GridSearchCV object clf with the paramters set above: pipeline, param_grid, sss
+gridDT = GridSearchCV(estimator = pipeline,
+                             param_grid = param_grid,
+                             scoring = 'f1',
+                             cv= 10)
 
-	clf_SVC.fit(features_train,labels_train)
-	pred_SVC = clf_SVC.predict(features_test)
-	print '\nSupport Vector Machine'
-	modelEvaluation(pred_SVC, labels_test)
+# Step 6: Do training and cross validation with clf (fit to the data)
+gridDT.fit(features_train,labels_train)
 
-	clf_tree.fit(features_train,labels_train)
-	pred_tree = clf_tree.predict(features_test)
-	print '\nDescision Tree'
-	modelEvaluation(pred_tree, labels_test)
+# Step 6.1: Get the set of best parameters
+print '\nBest parameters chosen from the grid:'
+pprint.pprint(gridDT.best_params_)
 
-	clf_KVC = KNeighborsClassifier()
-	clf_KVC.fit(features_train, labels_train)
-	pred_KVC = clf_KVC.predict(features_test)
-	print '\nK-nearest neighbors'
-	modelEvaluation(pred_KVC, labels_test)
+# Step 6.2: Get best estimator feature importances
+features_selected = [features_list[i+1] for i in gridDT.best_estimator_.named_steps['kbest'].get_support(indices=True)]
+print 'The Features Selected by SKB - GS:'
+pprint.pprint(features_selected)
 
-	clf_logit.fit(features_train, labels_train)
-	pred_logit = clf_logit.predict(features_test)
-	print '\nLogit model'
-	modelEvaluation(pred_logit, labels_test)
+f = features_list[1:]
+s = gridDT.best_estimator_.named_steps['kbest'].scores_
+results = {'features':f,'scores': s}
+selectKBestScores = pd.DataFrame(results).sort_values('scores',ascending=False)
+sns.barplot(x=selectKBestScores.features, y=selectKBestScores.scores)
+plt.title("K Best Scores in Decision Tree")
+plt.xticks(rotation=90)
+plt.show()
+
+# Step 6.3: Get best estimator
+clf_final = gridDT.best_estimator_
+
+# Step 7: Predict with testing set
+pred = clf.predict(features_test)
+tunedDecisionTree = modelEvaluation(pred, labels_test)
+#test_classifier(clf_final, my_dataset, features_list)
 
 
-'''
+# c) Logit Regression
+print '\nc) Logit Regression'
+# Step 1: Split the data in training and testing set(see above)
+
+# Step 2: Make pipeline
+pipeline = Pipeline([
+        ('scaler', MinMaxScaler()),
+        ('kbest',SelectKBest()),
+        ('clf', LogisticRegression())
+        ])
+
+# Step 3: Set parameters list
+param_grid = {'kbest__k': k_features,
+              'clf__C' : [1,1.1,1.2,1.3,1.4, 1.5,1.6,1.7,1.8,1.9,2], 
+              'clf__solver':['liblinear','sag']}
+
+#Step 4: Make cross validation iterator
+#sss = StratifiedShuffleSplit(n_splits=20, test_size=0.1, train_size=None, random_state=None)
+
+# Step 5: Make the GridSearchCV object clf with the paramters set above: pipeline, param_grid, sss
+gridLogit = GridSearchCV(estimator = pipeline,
+                             param_grid = param_grid,
+                             scoring = 'f1',
+                             cv= 10)
+
+# Step 6: Do training and cross validation with clf (fit to the data)
+gridLogit.fit(features_train,labels_train)
+
+# Step 6.1: Get the set of best parameters
+print '\nBest parameters chosen from the grid:'
+pprint.pprint(gridLogit.best_params_)
+
+# Step 6.2: Get best estimator
+features_selected = [features_list[i+1] for i in gridLogit.best_estimator_.named_steps['kbest'].get_support(indices=True)]
+print 'The Features Selected by SKB - GS:'
+pprint.pprint(features_selected)
+
+f = features_list[1:]
+s = gridLogit.best_estimator_.named_steps['kbest'].scores_
+results = {'features':f,'scores': s}
+selectKBestScores = pd.DataFrame(results).sort_values('scores',ascending=False)
+sns.barplot(x=selectKBestScores.features, y=selectKBestScores.scores)
+plt.title("K Best Scores in Logistic Regression")
+plt.xticks(rotation=90)
+plt.show()
+
+# Step 6.3: Get best estimator
+clf = gridLogit.best_estimator_
+
+# Step 7: Predict with testing set
+pred = clf.predict(features_test)
+tunedLogit = modelEvaluation(pred, labels_test)
+#test_classifier(clf, my_dataset, features_list)
+
+
+# d) K-Nearest Neighbors
+print '\nd) K-Nearest Neighbors'
+# Step 1: Split the data in training and testing set(see above)
+
+# Step 2: Make pipeline
+pipeline = Pipeline([
+        ('scaler', MinMaxScaler()),
+        ('kbest',SelectKBest()),
+        ('clf', KNeighborsClassifier())
+        ])
+# Step 3: Set parameters list
+param_grid = {'kbest__k': k_features,
+              'clf__n_neighbors' : [4,5,6,7], 
+              'clf__weights':['uniform','distance']}
+
+#Step 4: Make cross validation iterator
+#sss = StratifiedShuffleSplit(n_splits=20, test_size=0.1, train_size=None, random_state=None)
+
+# Step 5: Make the GridSearchCV object clf with the paramters set above: pipeline, param_grid, sss
+gridKNN = GridSearchCV(estimator = pipeline,
+                             param_grid = param_grid,
+                             scoring = 'f1',
+                             cv= 10)
+
+# Step 6: Do training and cross validation with clf (fit to the data)
+gridKNN.fit(features_train,labels_train)
+
+f = features_list[1:]
+s = gridKNN.best_estimator_.named_steps['kbest'].scores_
+results = {'features':f,'scores': s}
+selectKBestScores = pd.DataFrame(results).sort_values('scores',ascending=False)
+sns.barplot(x=selectKBestScores.features, y=selectKBestScores.scores)
+plt.title("K Best Scores in K-NN classifier")
+plt.xticks(rotation=90)
+plt.show()
+
+# Step 6.1: Get the set of best parameters
+print '\nBest parameters chosen from the grid:'
+pprint.pprint(gridKNN.best_params_)
+
+# Step 6.2: Get best estimator
+clf = gridKNN.best_estimator_
+
+# Step 7: Predict with testing set
+pred = clf.predict(features_test)
+tunedKNN = modelEvaluation(pred, labels_test)
+#test_classifier(clf, my_dataset, features_list)
+
+#Final results for fine-tuned algorithms
+print '\nFinal results for fine-tuned algorithms'
+results = {'Naive Bayes': tunedNaiveBayes, 'Decision Tree': tunedDecisionTree, 'Logit': tunedLogit, 'KNN': tunedKNN}
+print finalResults(results)
 
 
 ### Task 6: Dump your classifier, dataset, and features_list so anyone can
@@ -265,4 +405,7 @@ print 'Recall score mean: ', np.array(recall_score_list).mean()
 ### that the version of poi_id.py that you submit can be run on its own and
 ### generates the necessary .pkl files for validating your results.
 
-dump_classifier_and_data(clf, my_dataset, features_list)
+# The dumped classifier is the Decision Tree
+dump_classifier_and_data(clf_final, my_dataset, features_list)
+
+print "The end"
